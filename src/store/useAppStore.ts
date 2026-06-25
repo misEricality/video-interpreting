@@ -234,8 +234,22 @@ export const useAppStore = create<AppStore>((set, get) => ({
       get().persistCurrent(finalCurrent, true);
     } catch (err: any) {
       console.error('[runInterpretation] failed:', err);
-      const message = err?.message || '未知错误,请稍后重试';
-      set({ loading: { stage: 'idle', error: message } });
+      const raw = String(err?.message || '');
+      // 把后端代理返回的 404 + no_subtitle 翻译成友好提示
+      let message: string;
+      if (raw.includes('no_subtitle')) {
+        message =
+          '很抱歉,该视频无法解读(B 站暂无可用字幕)。请在 B 站确认视频有 CC 字幕后再试。';
+      } else if (raw.includes('need_login_subtitle')) {
+        message = '该视频字幕需要登录 B 站账号才能获取。请在「设置」中填入 SESSDATA 后重试。';
+      } else if (raw.includes('invalid bvid') || raw.includes('BV 号格式不正确')) {
+        message = 'BV 号格式不正确,请检查链接是否完整。';
+      } else if (raw.includes('fetch_failed') || raw.includes('fetch_subtitle_failed')) {
+        message = '请求 B 站失败,可能是网络问题,请稍后重试。';
+      } else {
+        message = raw || '未知错误,请稍后重试';
+      }
+      set({ current: null, loading: { stage: 'idle', error: message } });
     }
   },
 

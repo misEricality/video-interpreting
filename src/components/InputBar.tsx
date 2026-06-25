@@ -15,32 +15,38 @@ export function InputBar() {
   const isLoading = loading.stage !== 'idle' && loading.stage !== 'done';
 
   /**
-   * 输入框失焦时,若用户输入的链接包含额外的 query params
-   * (常见的如 ?spm_id_from=...&vd_source=...&p=5),
-   * 自动清洗成 https://www.bilibili.com/video/{bvid} 形式。
-   * 单纯展示一个绿色提示,告诉用户 URL 已被简化,提升可读性。
+   * 失焦时:清洗 URL(去掉分享时附加的追踪参数),保留提示。
+   * 同时也用于提交时强制清洗(用户可能粘完链接直接点按钮,没失焦过)。
    */
-  const handleUrlBlur = () => {
+  const cleanUrlInPlace = (showHint: boolean) => {
     const trimmed = url.trim();
-    if (!trimmed) return;
+    if (!trimmed) return false;
     const cleaned = cleanBiliUrl(trimmed);
     if (cleaned && cleaned !== trimmed) {
       setUrl(cleaned);
-      setUrlCleaned(true);
-      // 3 秒后清除提示(下次重新聚焦/失焦再触发)
-      setTimeout(() => setUrlCleaned(false), 3000);
+      if (showHint) {
+        setUrlCleaned(true);
+        setTimeout(() => setUrlCleaned(false), 3000);
+      }
+      return true;
     }
+    return false;
   };
+
+  const handleUrlBlur = () => cleanUrlInPlace(true);
 
   const handleSubmit = (e?: React.FormEvent) => {
     e?.preventDefault();
-    const bvid = parseBvid(url);
+    // 提交前强制清洗一次,避免用户粘完链接直接点按钮,URL 没失焦过
+    const wasCleaned = cleanUrlInPlace(false);
+    const finalUrl = wasCleaned ? (cleanBiliUrl(url.trim()) ?? url) : url;
+    const bvid = parseBvid(finalUrl);
     if (!bvid) {
       setUrlError('请输入有效的 Bilibili 视频链接(需包含 BV 号)');
       return;
     }
     setUrlError('');
-    runInterpretation({ url, focus: focus.trim() });
+    runInterpretation({ url: finalUrl, focus: focus.trim() });
   };
 
   return (
