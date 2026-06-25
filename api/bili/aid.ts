@@ -64,7 +64,8 @@ export default async function handler(request: Request): Promise<Response> {
         aid: view.data?.aid ?? 0,
         cid: firstPage.cid,
         title: view.data?.title ?? '',
-        duration: view.data?.duration ?? firstPage.duration ?? 0,
+        // 优先用 pagelist 的 duration — 避免合集视频返回整个合集的总时长
+        duration: firstPage.duration ?? view.data?.duration ?? 0,
         pages: pageList.data?.length ?? 1,
       })
     );
