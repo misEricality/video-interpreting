@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="description" content="输入 Bilibili 视频链接与关注点,由 AI 解读视频主要内容并定位相关片段时间戳。" />
+    <meta name="theme-color" content="#3b82f6" />
+    <title>视频解读 · Bilibili + AI</title>
+    <script>
+      // 在加载 React 前尽早应用主题,避免闪烁
+      (function () {
+        try {
+          var saved = localStorage.getItem('vi.theme.v1');
+          var prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+          var theme = saved || (prefersDark ? 'dark' : 'light');
+          if (theme === 'dark') document.documentElement.classList.add('dark');
+        } catch (e) {}
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
