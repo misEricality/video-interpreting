@@ -17,13 +17,33 @@ export function parseBvid(input: string): string | null {
 }
 
 /**
- * 规范化 B 站视频链接(尽可能还原成完整 https URL)。
- * 若输入是 BV 号,补成 https://www.bilibili.com/video/{bvid}
+ * 把用户输入的 B 站链接清洗成「开头的纯 URL」,即:
+ *   - 保留到 BV 号结束为止
+ *   - 去掉所有 query params(包括 ?p=N、spm_id_from、vd_source 等)
+ *
+ * 用途:用户经常复制带一大堆追踪参数的完整分享链接,
+ * 真正用到的只有 https://www.bilibili.com/video/{bvid}。
+ * 在「点击解读」前清洗一次即可,不要修改用户输入框里正在打字的原文。
+ *
+ * 例:
+ *   in : https://www.bilibili.com/video/BV1mvfKYJEqf?spm_id_from=333.788&p=5
+ *   out: https://www.bilibili.com/video/BV1mvfKYJEqf
  */
-export function normalizeBiliUrl(input: string): string | null {
+export function cleanBiliUrl(input: string): string | null {
   const bvid = parseBvid(input);
   if (!bvid) return null;
   return `https://www.bilibili.com/video/${bvid}`;
+}
+
+/**
+ * 规范化 B 站视频链接(尽可能还原成完整 https URL)。
+ * 若输入是 BV 号,补成 https://www.bilibili.com/video/{bvid}
+ *
+ * @deprecated 自 0.x 起改为 cleanBiliUrl(语义更明确:不会保留 ?p=N)。
+ *             保留仅为兼容旧调用方,新代码请用 cleanBiliUrl。
+ */
+export function normalizeBiliUrl(input: string): string | null {
+  return cleanBiliUrl(input);
 }
 
 /**

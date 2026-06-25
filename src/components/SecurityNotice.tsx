@@ -21,13 +21,13 @@ export function SecurityNotice({ alwaysShow = true }: Props) {
             <li className="flex items-start gap-1.5">
               <span className="text-brand-500 shrink-0 leading-relaxed">·</span>
               <span className="min-w-0 flex-1">
-                你的 API Key <strong>仅保存在本机浏览器</strong>的 localStorage 中(经 AES-256-GCM 加密),本站与 Cloudflare 均无法获取。
+                你的 API Key <strong>仅保存在本机浏览器</strong>的 localStorage 中(经 AES-256-GCM 加密),本站与部署服务器均无法获取。
               </span>
             </li>
             <li className="flex items-start gap-1.5">
               <span className="text-brand-500 shrink-0 leading-relaxed">·</span>
               <span className="min-w-0 flex-1">
-                Cloudflare Pages Functions <strong>只代理 B 站字幕请求</strong>,不会触及你的 Key。
+                部署的 Edge Functions <strong>只代理 B 站字幕请求</strong>,不会触及你的 Key(所有 AI 调用均由浏览器直接发往模型服务)。
               </span>
             </li>
             <li className="flex items-start gap-1.5">

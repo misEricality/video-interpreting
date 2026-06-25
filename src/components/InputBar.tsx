@@ -2,16 +2,35 @@ import { useState } from 'react';
 import { useAppStore } from '@/store/useAppStore';
 import { Input, Textarea } from './ui/Input';
 import { Button } from './ui/Button';
-import { parseBvid } from '@/utils/url';
-import { Loader2, Sparkles, Link2, MessageSquareText } from 'lucide-react';
+import { cleanBiliUrl, parseBvid } from '@/utils/url';
+import { Loader2, Sparkles, Link2, MessageSquareText, Wand2 } from 'lucide-react';
 
 export function InputBar() {
   const [url, setUrl] = useState('');
   const [focus, setFocus] = useState('');
   const [urlError, setUrlError] = useState('');
+  const [urlCleaned, setUrlCleaned] = useState(false);
   const runInterpretation = useAppStore((s) => s.runInterpretation);
   const loading = useAppStore((s) => s.loading);
   const isLoading = loading.stage !== 'idle' && loading.stage !== 'done';
+
+  /**
+   * 输入框失焦时,若用户输入的链接包含额外的 query params
+   * (常见的如 ?spm_id_from=...&vd_source=...&p=5),
+   * 自动清洗成 https://www.bilibili.com/video/{bvid} 形式。
+   * 单纯展示一个绿色提示,告诉用户 URL 已被简化,提升可读性。
+   */
+  const handleUrlBlur = () => {
+    const trimmed = url.trim();
+    if (!trimmed) return;
+    const cleaned = cleanBiliUrl(trimmed);
+    if (cleaned && cleaned !== trimmed) {
+      setUrl(cleaned);
+      setUrlCleaned(true);
+      // 3 秒后清除提示(下次重新聚焦/失焦再触发)
+      setTimeout(() => setUrlCleaned(false), 3000);
+    }
+  };
 
   const handleSubmit = (e?: React.FormEvent) => {
     e?.preventDefault();
@@ -36,12 +55,20 @@ export function InputBar() {
           onChange={(e) => {
             setUrl(e.target.value);
             if (urlError) setUrlError('');
+            if (urlCleaned) setUrlCleaned(false);
           }}
+          onBlur={handleUrlBlur}
           placeholder="https://www.bilibili.com/video/BVxxxxxxxxxx"
           disabled={isLoading}
           autoComplete="off"
           spellCheck={false}
         />
+        {urlCleaned && (
+          <p className="text-xs text-emerald-600 dark:text-emerald-400 px-1 flex items-center gap-1">
+            <Wand2 className="h-3 w-3" />
+            已自动简化链接(去掉了分享时附加的追踪参数)
+          </p>
+        )}
         {urlError && (
           <p className="text-xs text-[var(--danger)] px-1">{urlError}</p>
         )}

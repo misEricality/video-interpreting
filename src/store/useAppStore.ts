@@ -27,7 +27,7 @@ interface AppStore {
   current: CurrentConversation | null;
   history: Conversation[];
   loading: LoadingState;
-  drawer: { settings: boolean; history: boolean };
+  drawer: { settings: boolean; history: boolean; usage: boolean };
   /** 当前 chat 流式响应的 AbortController(仅 streaming 时存在) */
   chatAbortController: AbortController | null;
   /** chat 流式状态 */
@@ -38,7 +38,7 @@ interface AppStore {
 
   // Settings
   updateSettings: (patch: Partial<Settings>) => Promise<void>;
-  setDrawer: (kind: 'settings' | 'history', open: boolean) => void;
+  setDrawer: (kind: 'settings' | 'history' | 'usage', open: boolean) => void;
 
   // Run
   runInterpretation: (input: { url: string; focus: string }) => Promise<void>;
@@ -71,7 +71,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
   current: null,
   history: [],
   loading: { stage: 'idle' },
-  drawer: { settings: false, history: false },
+  drawer: { settings: false, history: false, usage: false },
   chatAbortController: null,
   chatStreamStatus: 'idle',
 
@@ -167,10 +167,13 @@ export const useAppStore = create<AppStore>((set, get) => ({
       // 阶段 2: 拿字幕
       const { cues: subs, aiSubtitle } = await fetchSubtitles(bvid, meta.cid, settings.sessdata);
       if (!subs.length) {
+        // 没有字幕(可能因为视频本身没字幕,或字幕需要登录)
+        // 提前终止,不浪费 AI 调用。
         set({
+          current: null,
           loading: {
             stage: 'idle',
-            error: '该视频暂无可用字幕,无法解读。可尝试选择带字幕的视频。',
+            error: '很抱歉,该视频无法解读(B 站暂无可用字幕)。请在 B 站确认视频有 CC 字幕后再试。',
           },
         });
         return;

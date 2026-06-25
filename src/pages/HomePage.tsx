@@ -6,8 +6,9 @@ import { HistoryDrawer } from '@/components/HistoryDrawer';
 import { ResultView } from '@/components/ResultView';
 import { ErrorBanner } from '@/components/ErrorBanner';
 import { SecurityModal } from '@/components/SecurityNotice';
+import { UsageGuide } from '@/components/UsageGuide';
 import { ThemeToggle } from '@/components/ThemeToggle';
-import { Settings, History as HistoryIcon, Sparkles } from 'lucide-react';
+import { Settings, History as HistoryIcon, Sparkles, HelpCircle } from 'lucide-react';
 
 const KEY_SECURITY_ACK = 'vi.security.ack.v1';
 
@@ -49,6 +50,14 @@ export function HomePage() {
             </div>
           </div>
           <div className="flex items-center gap-1">
+            <button
+              onClick={() => setDrawer('usage', true)}
+              className="p-2 rounded-lg text-[var(--ink-muted)] hover:bg-[var(--bg-soft)] hover:text-[var(--ink)] transition-colors"
+              aria-label="使用指南"
+              title="使用指南"
+            >
+              <HelpCircle className="h-4 w-4" />
+            </button>
             <button
               onClick={() => setDrawer('history', true)}
               className="p-2 rounded-lg text-[var(--ink-muted)] hover:bg-[var(--bg-soft)] hover:text-[var(--ink)] transition-colors"
@@ -109,6 +118,7 @@ export function HomePage() {
       {/* Drawers & Modals */}
       <SettingsDrawer />
       <HistoryDrawer />
+      <UsageGuide />
       <SecurityModal open={showSecurity} onAcknowledge={handleAck} />
     </div>
   );
