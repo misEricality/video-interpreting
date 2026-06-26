@@ -20,7 +20,13 @@ import { decryptString, encryptString } from '@/utils/crypto';
 import { parseBvid, normalizeBiliUrl } from '@/utils/url';
 import { fetchVideoMeta, fetchSubtitles } from '@/services/bilibili';
 import { chatAboutVideo, interpretVideo, type ProgressEvent } from '@/services/ai';
-import { getVendor, detectBaseUrlByModel, detectChatPathByModel, findVendorByModel } from '@/config/vendors';
+import {
+  getVendor,
+  detectBaseUrlByModel,
+  detectChatPathByModel,
+  findVendorByModel,
+  canonicalModelId,
+} from '@/config/vendors';
 
 interface AppStore {
   // ===== State =====
@@ -87,19 +93,28 @@ export const useAppStore = create<AppStore>((set, get) => ({
     if (persisted.rememberSessdata && persisted.sessdata) {
       sessdata = await decryptString(persisted.sessdata);
     }
-    // 老数据迁移:补齐缺失/不一致的 vendor / chatPath / baseUrl
+    // 老数据迁移:补齐缺失/不一致的 vendor / chatPath / baseUrl / model id
     const fromModel = findVendorByModel(persisted.model);
     const expectedVendor =
       (persisted as any).vendor && (persisted as any).vendor !== 'undefined'
         ? (persisted as any).vendor
         : fromModel?.id || DEFAULT_SETTINGS.vendor;
+    // 把用户填的 model(可能是显示名 / 大小写不对)规范化为厂商定义的规范 id
+    const normalizedModel = canonicalModelId(persisted.model) || persisted.model;
+    if (normalizedModel !== persisted.model) {
+      console.info(
+        '[init] 已规范化 model id:',
+        { from: persisted.model, to: normalizedModel }
+      );
+    }
     // 先按 model 反推"应该用"的 baseUrl / chatPath
     // 优先级:model 命中的厂商 → 当前 vendor 兜底 → 默认
+    // 注意:用规范化后的 model 来推(否则 fuzzy 匹配可能漏掉)
     const expectedBaseUrl =
       fromModel?.baseUrl || getVendor(expectedVendor).baseUrl || DEFAULT_SETTINGS.baseUrl;
     const expectedChatPath =
       fromModel?.chatPath ||
-      detectChatPathByModel(persisted.model) ||
+      detectChatPathByModel(normalizedModel) ||
       getVendor(expectedVendor).chatPath ||
       DEFAULT_SETTINGS.chatPath;
     // 只在用户值与"按当前 model 应该用的一致"时才保留,否则覆盖为正确值
@@ -108,6 +123,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
     const persistedChatPath = (persisted as any).chatPath;
     const migrated: Settings = {
       ...persisted,
+      model: normalizedModel,
       // 1. 修正 vendor:如果当前 vendor 与 model 不匹配,以 model 为准
       vendor: fromModel ? fromModel.id : expectedVendor,
       apiKey,
@@ -123,7 +139,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
         { from: { baseUrl: persistedBaseUrl, chatPath: persistedChatPath } },
         { to: { baseUrl: expectedBaseUrl, chatPath: expectedChatPath } },
         'model =',
-        persisted.model,
+        normalizedModel,
         'vendor =',
         fromModel?.id
       );
@@ -150,9 +166,12 @@ export const useAppStore = create<AppStore>((set, get) => ({
     // 模型改变时:若新模型在已知厂商列表里(模糊匹配),自动同步 vendor / baseUrl / chatPath
     // (用户不再需要选厂商,只需输模型名 — 包括显示名格式如 `DeepSeek-V4-Pro`)
     if (patch.model && patch.model !== prev.model) {
-      const v = findVendorByModel(patch.model);
-      const detectedUrl = detectBaseUrlByModel(patch.model);
-      const detectedPath = detectChatPathByModel(patch.model);
+      // 规范化 model id(用户可能填显示名 / 大小写不对),保证存到 settings 和发请求都用规范 id
+      const canonical = canonicalModelId(patch.model);
+      if (canonical && canonical !== patch.model) next.model = canonical;
+      const v = findVendorByModel(next.model);
+      const detectedUrl = detectBaseUrlByModel(next.model);
+      const detectedPath = detectChatPathByModel(next.model);
       if (v) {
         // 同步 vendor — 保证 vendor 与模型一致
         if (v.id !== next.vendor) next.vendor = v.id;

@@ -217,3 +217,23 @@ export function findVendorByModel(modelId: string | undefined | null): VendorInf
   }
   return null;
 }
+
+/**
+ * 把用户输入的模型名(可能是显示名 / 大小写不同 / 多了空格下划线)规范化成
+ * 厂商定义的规范 model.id(发请求时用)。
+ *
+ * - DeepSeek 这类厂商 API 严格要求小写 ID(传 `DeepSeek-V4-Pro` 会 400)
+ * - 返回规范 id,如 `deepseek-v4-pro`、`MiniMax-M3`(原样)
+ * - 命中不到任何已知模型时,返回原值(让用户自填的 ID 透传)
+ */
+export function canonicalModelId(modelId: string | undefined | null): string {
+  if (!modelId) return '';
+  for (const v of VENDORS) {
+    for (const m of v.models) {
+      if (m.id === modelId) return m.id;
+      if (normalizeModel(m.id) === normalizeModel(modelId)) return m.id;
+      if (normalizeModel(m.label) === normalizeModel(modelId)) return m.id;
+    }
+  }
+  return modelId;
+}

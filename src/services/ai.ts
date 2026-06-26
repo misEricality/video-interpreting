@@ -6,7 +6,7 @@ import {
   buildChatMessages,
 } from '@/prompts/interpreter';
 import { jsonrepair } from 'jsonrepair';
-import { getVendor } from '@/config/vendors';
+import { getVendor, canonicalModelId } from '@/config/vendors';
 
 export interface ProgressEvent {
   stage: 'fetching' | 'interpreting' | 'streaming' | 'done';
@@ -207,8 +207,11 @@ async function callChatCompletionOnce(args: {
   signal?: AbortSignal;
 }): Promise<string> {
   const url = buildChatUrl(args.baseUrl, args.chatPath);
+  // 防御性:发请求前再规范化一次 model,避免 store 层漏掉后厂商报 400
+  // (DeepSeek API 严格要求小写 ID,传 `DeepSeek-V4-Pro` 会返回 400)
+  const apiModel = canonicalModelId(args.model) || args.model;
   const body: Record<string, unknown> = {
-    model: args.model,
+    model: apiModel,
     messages: args.messages,
     temperature: args.temperature,
     stream: false,
@@ -216,7 +219,18 @@ async function callChatCompletionOnce(args: {
   // 合并厂商特有的 extraBody(如 DeepSeek 关掉 thinking 模式)
   const vendorExtra = args.vendor ? getVendor(args.vendor).extraBody : undefined;
   if (vendorExtra) Object.assign(body, vendorExtra);
-  console.log('[AI Request]', url, '| model:', args.model, '| vendor:', args.vendor, '| body keys:', Object.keys(body));
+  console.log(
+    '[AI Request]',
+    url,
+    '| model:',
+    apiModel,
+    '(input:',
+    args.model + ')',
+    '| vendor:',
+    args.vendor,
+    '| body keys:',
+    Object.keys(body)
+  );
   const { signal, cancel } = withTimeout(args.signal);
   let res: Response;
   try {
@@ -446,6 +460,8 @@ export async function chatAboutVideo(args: ChatArgs): Promise<{ content: string 
   });
 
   const url = buildChatUrl(settings.baseUrl, settings.chatPath);
+  // 防御性:发请求前规范化 model id(DeepSeek API 严格小写)
+  const apiModel = canonicalModelId(settings.model) || settings.model;
   const res = await fetch(url, {
     method: 'POST',
     headers: {
@@ -453,7 +469,7 @@ export async function chatAboutVideo(args: ChatArgs): Promise<{ content: string 
       Authorization: `Bearer ${settings.apiKey}`,
     },
     body: JSON.stringify({
-      model: settings.model,
+      model: apiModel,
       messages,
       temperature: settings.temperature,
       stream: true,
