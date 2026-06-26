@@ -284,6 +284,7 @@ async function callChatCompletionOnce(args: {
   if (args.vendor === 'deepseek') {
     body.thinking = { type: 'disabled' };
   }
+  console.log('[AI Request]', url, '| model:', args.model, '| vendor:', args.vendor, '| body keys:', Object.keys(body));
   const { signal, cancel } = withTimeout(args.signal);
   let res: Response;
   try {
@@ -298,12 +299,14 @@ async function callChatCompletionOnce(args: {
     });
   } catch (e: any) {
     cancel();
+    console.error('[AI Request Failed]', url, e);
     if (e?.name === 'AbortError') {
       throw new Error(`AI 接口超时(90s 未响应)。如持续发生,可在设置里关闭「分段解读」后重试。`);
     }
     throw new Error(`AI 接口请求失败: ${e?.message || e}`);
   }
   cancel();
+  console.log('[AI Response]', args.model, '| status:', res.status, '| ok:', res.ok);
   if (!res.ok) {
     let detail = '';
     try {
