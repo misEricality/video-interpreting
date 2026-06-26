@@ -20,6 +20,7 @@ import { decryptString, encryptString } from '@/utils/crypto';
 import { parseBvid, normalizeBiliUrl } from '@/utils/url';
 import { fetchVideoMeta, fetchSubtitles } from '@/services/bilibili';
 import { chatAboutVideo, interpretVideo, type ProgressEvent } from '@/services/ai';
+import { getVendor } from '@/config/vendors';
 
 interface AppStore {
   // ===== State =====
@@ -86,8 +87,15 @@ export const useAppStore = create<AppStore>((set, get) => ({
     if (persisted.rememberSessdata && persisted.sessdata) {
       sessdata = await decryptString(persisted.sessdata);
     }
+    // 老数据迁移:如果没有 vendor 字段,补成 MiniMax(项目原始推荐)
+    const migrated: Settings = {
+      ...persisted,
+      vendor: (persisted as any).vendor ?? DEFAULT_SETTINGS.vendor,
+      apiKey,
+      sessdata,
+    };
     set({
-      settings: { ...persisted, apiKey, sessdata },
+      settings: migrated,
       history: loadHistory(),
     });
   },
@@ -95,6 +103,13 @@ export const useAppStore = create<AppStore>((set, get) => ({
   updateSettings: async (patch) => {
     const prev = get().settings;
     const next: Settings = { ...prev, ...patch };
+    // 切厂商时:自动同步 baseUrl 和 model(避免用户手动改)
+    // 但如果用户已经在该厂商下手动改过 model,允许保留(由 UI 层决定是否传 patch.model)
+    if (patch.vendor && patch.vendor !== prev.vendor) {
+      const v = getVendor(patch.vendor);
+      next.baseUrl = v.baseUrl;
+      next.model = v.defaultModel;
+    }
     // 决定是否加密存储敏感字段
     let storedKey = next.apiKey;
     if (next.rememberKey && next.apiKey) {

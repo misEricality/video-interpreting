@@ -78,11 +78,14 @@ export interface Conversation extends CurrentConversation {
   id: string;
 }
 
+import type { VendorId } from '@/config/vendors';
+
 // 设置
 export interface Settings {
+  vendor: VendorId; // 厂商(决定 baseUrl + 模型列表)
   apiKey: string; // 加密后存储的密文(若 rememberKey),否则为空
-  baseUrl: string; // 默认 https://api.minimaxi.com/v1
-  model: string; // 默认 MiniMax-M3
+  baseUrl: string; // 选厂商时自动填入,允许覆盖
+  model: string; // 选厂商时自动填入默认模型,允许覆盖
   temperature: number; // 默认 0.4
   useChunked: boolean; // 默认 true
   rememberKey: boolean; // 默认 false
@@ -92,6 +95,7 @@ export interface Settings {
 
 // 默认设置
 export const DEFAULT_SETTINGS: Settings = {
+  vendor: 'MiniMax',
   apiKey: '',
   baseUrl: 'https://api.minimaxi.com/v1',
   model: 'MiniMax-M3',
