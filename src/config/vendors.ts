@@ -35,6 +35,12 @@ export interface VendorInfo {
    * - MiniMax 用自家专有 `/text/chatcompletion_v2`
    */
   chatPath: string;
+  /**
+   * 厂商特有的请求体附加字段(会合并进每次请求 body)。
+   * - DeepSeek 关闭 V4 默认 thinking 模式(高推理深度会让响应极慢甚至卡死)
+   * - 其他厂商留空
+   */
+  extraBody?: Record<string, unknown>;
   /** 申请 API Key 的官方页面 */
   keyUrl: string;
   /** 简短介绍(展示在设置面板) */
@@ -51,6 +57,9 @@ export const VENDORS: VendorInfo[] = [
     name: 'DeepSeek',
     baseUrl: 'https://api.deepseek.com/v1',
     chatPath: '/chat/completions',
+    // V4 系列默认开启 thinking 模式,高推理深度会让响应极慢。
+    // 字幕解读属于简单任务,直接关掉 thinking 即可。
+    extraBody: { thinking: { type: 'disabled' } },
     keyUrl: 'https://platform.deepseek.com/api_keys',
     description: '深度求索,国产开源之光,价格便宜,长上下文表现好。',
     defaultModel: 'deepseek-v4-flash',

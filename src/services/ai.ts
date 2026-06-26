@@ -47,6 +47,31 @@ function buildChatUrl(baseUrl: string, chatPath?: string): string {
 }
 
 /**
+ * AI 接口超时(默认 90s)。OpenAI 兼容接口通常 < 30s,但 DeepSeek V4 thinking
+ * 模式 + 长字幕 + 长 prompt,可能需要更久;90s 仍超时则提示用户。
+ */
+const AI_REQUEST_TIMEOUT_MS = 90_000;
+
+/**
+ * 包装一层 AbortController,把超时和外部 signal 合并。
+ */
+function withTimeout(signal?: AbortSignal, timeoutMs = AI_REQUEST_TIMEOUT_MS): {
+  signal: AbortSignal;
+  cancel: () => void;
+} {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(new Error('AI 接口超时(90s 未响应)')), timeoutMs);
+  if (signal) {
+    if (signal.aborted) ctrl.abort(signal.reason);
+    else signal.addEventListener('abort', () => ctrl.abort(signal.reason), { once: true });
+  }
+  return {
+    signal: ctrl.signal,
+    cancel: () => clearTimeout(timer),
+  };
+}
+
+/**
  * 切片参数:8 分钟一片,最多 4 片。
  */
 const CHUNK_SEC = 480;
@@ -235,7 +260,7 @@ async function callChatCompletionStream(args: {
 }
 
 /**
- * 调用 MiniMax API,非流式(用于 Reduce 阶段,简单一点)。
+ * 调用 AI 接口,非流式(用于 Reduce 阶段,简单一点)。
  */
 async function callChatCompletionOnce(args: {
   baseUrl: string;
@@ -244,23 +269,41 @@ async function callChatCompletionOnce(args: {
   temperature: number;
   messages: { role: 'system' | 'user' | 'assistant'; content: string }[];
   chatPath?: string;
+  vendor?: string;
   signal?: AbortSignal;
 }): Promise<string> {
   const url = buildChatUrl(args.baseUrl, args.chatPath);
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${args.apiKey}`,
-    },
-    body: JSON.stringify({
-      model: args.model,
-      messages: args.messages,
-      temperature: args.temperature,
-      stream: false,
-    }),
-    signal: args.signal,
-  });
+  const body: Record<string, unknown> = {
+    model: args.model,
+    messages: args.messages,
+    temperature: args.temperature,
+    stream: false,
+  };
+  // DeepSeek V4 默认 thinking 模式会让字幕解读卡几十秒甚至返回空 content,
+  // 这里在请求体里关掉。其它厂商暂不动。
+  if (args.vendor === 'deepseek') {
+    body.thinking = { type: 'disabled' };
+  }
+  const { signal, cancel } = withTimeout(args.signal);
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${args.apiKey}`,
+      },
+      body: JSON.stringify(body),
+      signal,
+    });
+  } catch (e: any) {
+    cancel();
+    if (e?.name === 'AbortError') {
+      throw new Error(`AI 接口超时(90s 未响应)。如持续发生,可在设置里关闭「分段解读」后重试。`);
+    }
+    throw new Error(`AI 接口请求失败: ${e?.message || e}`);
+  }
+  cancel();
   if (!res.ok) {
     let detail = '';
     try {
@@ -271,8 +314,19 @@ async function callChatCompletionOnce(args: {
     }
     throw new Error(`AI 接口错误 ${res.status}: ${detail || res.statusText}`);
   }
-  const j = await res.json();
-  return j?.choices?.[0]?.message?.content ?? '';
+  if (!res.body) throw new Error('AI 接口无响应体');
+  const data = await res.json();
+  console.log('[AI Once]', args.model, '->', data);
+  const content = data?.choices?.[0]?.message?.content;
+  if (typeof content === 'string' && content.length > 0) return content;
+  // 兜底:DeepSeek V4 thinking 模式下,主 content 可能为空,回退到 reasoning_content
+  const reasoning = data?.choices?.[0]?.message?.reasoning_content;
+  if (typeof reasoning === 'string' && reasoning.length > 0) {
+    console.warn('[AI Once] 主 content 为空,fallback 到 reasoning_content');
+    return reasoning;
+  }
+  // 完全没有 content
+  throw new Error(`AI 接口返回为空(${args.model}): ${JSON.stringify(data).slice(0, 200)}`);
 }
 
 /**
@@ -370,9 +424,11 @@ export async function interpretVideo(args: InterpretArgs): Promise<Interpretatio
   onProgress?.({ stage: 'interpreting', message: '正在合并各段结果...' });
   const reduceText = await callChatCompletionOnce({
     baseUrl: settings.baseUrl,
+    chatPath: settings.chatPath,
     apiKey: settings.apiKey,
     model: settings.model,
     temperature: Math.max(0.1, settings.temperature - 0.2),
+    vendor: settings.vendor,
     messages: [
       { role: 'system', content: SYSTEM_PROMPT },
       { role: 'user', content: buildReducePrompt(mapResults) },
