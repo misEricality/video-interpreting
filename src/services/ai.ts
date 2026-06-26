@@ -6,6 +6,7 @@ import {
   buildChatMessages,
 } from '@/prompts/interpreter';
 import { jsonrepair } from 'jsonrepair';
+import { getVendor } from '@/config/vendors';
 
 export interface ProgressEvent {
   stage: 'fetching' | 'interpreting' | 'streaming' | 'done';
@@ -193,73 +194,6 @@ function extractFirstBalancedJson(text: string): string | null {
 }
 
 /**
- * 调用 MiniMax API,流式读取 SSE。
- * 返回完整文本。
- */
-async function callChatCompletionStream(args: {
-  baseUrl: string;
-  apiKey: string;
-  model: string;
-  temperature: number;
-  messages: { role: 'system' | 'user' | 'assistant'; content: string }[];
-  signal?: AbortSignal;
-}): Promise<string> {
-  const url = `${args.baseUrl.replace(/\/$/, '')}/text/chatcompletion_v2`;
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${args.apiKey}`,
-    },
-    body: JSON.stringify({
-      model: args.model,
-      messages: args.messages,
-      temperature: args.temperature,
-      stream: true,
-    }),
-    signal: args.signal,
-  });
-  if (!res.ok) {
-    let detail = '';
-    try {
-      const j = await res.json();
-      detail = j?.error?.message || j?.message || JSON.stringify(j).slice(0, 200);
-    } catch {
-      detail = await res.text().catch(() => '');
-    }
-    throw new Error(`AI 接口错误 ${res.status}: ${detail || res.statusText}`);
-  }
-  if (!res.body) throw new Error('AI 接口无响应体');
-
-  const reader = res.body.getReader();
-  const decoder = new TextDecoder();
-  let buf = '';
-  let full = '';
-
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    buf += decoder.decode(value, { stream: true });
-    const lines = buf.split('\n');
-    buf = lines.pop() ?? '';
-    for (const line of lines) {
-      const trimmed = line.trim();
-      if (!trimmed || !trimmed.startsWith('data:')) continue;
-      const payload = trimmed.slice(5).trim();
-      if (payload === '[DONE]') continue;
-      try {
-        const j = JSON.parse(payload);
-        const delta = j?.choices?.[0]?.delta?.content ?? '';
-        if (delta) full += delta;
-      } catch {
-        // 忽略单行解析失败
-      }
-    }
-  }
-  return full;
-}
-
-/**
  * 调用 AI 接口,非流式(用于 Reduce 阶段,简单一点)。
  */
 async function callChatCompletionOnce(args: {
@@ -279,11 +213,9 @@ async function callChatCompletionOnce(args: {
     temperature: args.temperature,
     stream: false,
   };
-  // DeepSeek V4 默认 thinking 模式会让字幕解读卡几十秒甚至返回空 content,
-  // 这里在请求体里关掉。其它厂商暂不动。
-  if (args.vendor === 'deepseek') {
-    body.thinking = { type: 'disabled' };
-  }
+  // 合并厂商特有的 extraBody(如 DeepSeek 关掉 thinking 模式)
+  const vendorExtra = args.vendor ? getVendor(args.vendor).extraBody : undefined;
+  if (vendorExtra) Object.assign(body, vendorExtra);
   console.log('[AI Request]', url, '| model:', args.model, '| vendor:', args.vendor, '| body keys:', Object.keys(body));
   const { signal, cancel } = withTimeout(args.signal);
   let res: Response;
@@ -352,6 +284,7 @@ export async function interpretVideo(args: InterpretArgs): Promise<Interpretatio
       apiKey: settings.apiKey,
       model: settings.model,
       temperature: settings.temperature,
+      vendor: settings.vendor,
       messages: [
         { role: 'system', content: SYSTEM_PROMPT },
         { role: 'user', content: userPayload },
@@ -397,6 +330,7 @@ export async function interpretVideo(args: InterpretArgs): Promise<Interpretatio
       apiKey: settings.apiKey,
       model: settings.model,
       temperature: settings.temperature,
+      vendor: settings.vendor,
       messages: [
         { role: 'system', content: SYSTEM_PROMPT },
         { role: 'user', content: userPayload },

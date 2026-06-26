@@ -93,25 +93,41 @@ export const useAppStore = create<AppStore>((set, get) => ({
       (persisted as any).vendor && (persisted as any).vendor !== 'undefined'
         ? (persisted as any).vendor
         : fromModel?.id || DEFAULT_SETTINGS.vendor;
+    // 先按 model 反推"应该用"的 baseUrl / chatPath
+    // 优先级:model 命中的厂商 → 当前 vendor 兜底 → 默认
+    const expectedBaseUrl =
+      fromModel?.baseUrl || getVendor(expectedVendor).baseUrl || DEFAULT_SETTINGS.baseUrl;
+    const expectedChatPath =
+      fromModel?.chatPath ||
+      detectChatPathByModel(persisted.model) ||
+      getVendor(expectedVendor).chatPath ||
+      DEFAULT_SETTINGS.chatPath;
+    // 只在用户值与"按当前 model 应该用的一致"时才保留,否则覆盖为正确值
+    // 这样能修复:之前 MiniMax 老配置里残留的 baseUrl/chatPath 没被洗掉的问题
+    const persistedBaseUrl = (persisted as any).baseUrl;
+    const persistedChatPath = (persisted as any).chatPath;
     const migrated: Settings = {
       ...persisted,
       // 1. 修正 vendor:如果当前 vendor 与 model 不匹配,以 model 为准
       vendor: fromModel ? fromModel.id : expectedVendor,
       apiKey,
       sessdata,
-      // 2. 修正 baseUrl:若当前 baseUrl 与 vendor 不匹配,以 vendor 为准
-      baseUrl:
-        (persisted as any).baseUrl && getVendor(expectedVendor).baseUrl !== (persisted as any).baseUrl
-          ? fromModel
-            ? fromModel.baseUrl
-            : getVendor(expectedVendor).baseUrl
-          : (persisted as any).baseUrl || DEFAULT_SETTINGS.baseUrl,
-      // 3. 修正 chatPath:同上
-      chatPath:
-        (persisted as any).chatPath ||
-        detectChatPathByModel(persisted.model) ||
-        getVendor(expectedVendor).chatPath,
+      // 2. 修正 baseUrl:不匹配就覆盖
+      baseUrl: persistedBaseUrl === expectedBaseUrl ? persistedBaseUrl : expectedBaseUrl,
+      // 3. 修正 chatPath:不匹配就覆盖
+      chatPath: persistedChatPath === expectedChatPath ? persistedChatPath : expectedChatPath,
     };
+    if (persistedBaseUrl !== expectedBaseUrl || persistedChatPath !== expectedChatPath) {
+      console.info(
+        '[init] 已迁移 baseUrl/chatPath:',
+        { from: { baseUrl: persistedBaseUrl, chatPath: persistedChatPath } },
+        { to: { baseUrl: expectedBaseUrl, chatPath: expectedChatPath } },
+        'model =',
+        persisted.model,
+        'vendor =',
+        fromModel?.id
+      );
+    }
     set({
       settings: migrated,
       history: loadHistory(),
