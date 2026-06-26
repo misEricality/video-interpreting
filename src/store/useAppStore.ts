@@ -20,7 +20,7 @@ import { decryptString, encryptString } from '@/utils/crypto';
 import { parseBvid, normalizeBiliUrl } from '@/utils/url';
 import { fetchVideoMeta, fetchSubtitles } from '@/services/bilibili';
 import { chatAboutVideo, interpretVideo, type ProgressEvent } from '@/services/ai';
-import { getVendor, detectBaseUrlByModel } from '@/config/vendors';
+import { getVendor, detectBaseUrlByModel, detectChatPathByModel } from '@/config/vendors';
 
 interface AppStore {
   // ===== State =====
@@ -103,21 +103,26 @@ export const useAppStore = create<AppStore>((set, get) => ({
   updateSettings: async (patch) => {
     const prev = get().settings;
     const next: Settings = { ...prev, ...patch };
-    // 切厂商时:同步 baseUrl;老厂商/手填的 model 不在新厂商列表里时,回退到默认 model
+    // 切厂商时:同步 baseUrl + chatPath;老厂商/手填的 model 不在新厂商列表里时,回退到默认 model
     if (patch.vendor && patch.vendor !== prev.vendor) {
       const v = getVendor(patch.vendor);
       next.baseUrl = v.baseUrl;
+      next.chatPath = v.chatPath;
       const stillValid = v.models.some((m) => m.id === next.model);
       if (!stillValid) {
         next.model = v.defaultModel;
       }
     }
-    // 模型改变时:若新模型在已知厂商列表里,自动同步 baseUrl
+    // 模型改变时:若新模型在已知厂商列表里,自动同步 baseUrl + chatPath
     // (用户不再需要选厂商,只需输模型名)
     if (patch.model && patch.model !== prev.model) {
-      const detected = detectBaseUrlByModel(patch.model);
-      if (detected && detected !== next.baseUrl) {
-        next.baseUrl = detected;
+      const detectedUrl = detectBaseUrlByModel(patch.model);
+      const detectedPath = detectChatPathByModel(patch.model);
+      if (detectedUrl && detectedUrl !== next.baseUrl) {
+        next.baseUrl = detectedUrl;
+      }
+      if (detectedPath && detectedPath !== next.chatPath) {
+        next.chatPath = detectedPath;
       }
     }
     // 决定是否加密存储敏感字段

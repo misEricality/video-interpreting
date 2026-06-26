@@ -32,6 +32,21 @@ interface InterpretArgs {
 }
 
 /**
+ * 拼出 Chat Completions 完整 URL。
+ * - 默认用 settings.chatPath(随厂商自动维护)
+ * - 若老数据没有 chatPath 字段,按 baseUrl 自动回退(MiniMax 域走专有端点,其余走 OpenAI 标准端点)
+ */
+function buildChatUrl(baseUrl: string, chatPath?: string): string {
+  const base = baseUrl.replace(/\/$/, '');
+  if (chatPath && chatPath.trim()) {
+    return `${base}${chatPath.startsWith('/') ? chatPath : '/' + chatPath}`;
+  }
+  // 回退:按 baseUrl 域名启发式判断
+  const path = /minimaxi\.com/i.test(base) ? '/text/chatcompletion_v2' : '/chat/completions';
+  return `${base}${path}`;
+}
+
+/**
  * 切片参数:8 分钟一片,最多 4 片。
  */
 const CHUNK_SEC = 480;
@@ -228,9 +243,10 @@ async function callChatCompletionOnce(args: {
   model: string;
   temperature: number;
   messages: { role: 'system' | 'user' | 'assistant'; content: string }[];
+  chatPath?: string;
   signal?: AbortSignal;
 }): Promise<string> {
-  const url = `${args.baseUrl.replace(/\/$/, '')}/text/chatcompletion_v2`;
+  const url = buildChatUrl(args.baseUrl, args.chatPath);
   const res = await fetch(url, {
     method: 'POST',
     headers: {
@@ -275,6 +291,7 @@ export async function interpretVideo(args: InterpretArgs): Promise<Interpretatio
     const userPayload = buildSubtitlePayload(subtitles, focus);
     const text = await callChatCompletionOnce({
       baseUrl: settings.baseUrl,
+      chatPath: settings.chatPath,
       apiKey: settings.apiKey,
       model: settings.model,
       temperature: settings.temperature,
@@ -319,6 +336,7 @@ export async function interpretVideo(args: InterpretArgs): Promise<Interpretatio
     const userPayload = buildSubtitlePayload(sub, focus);
     const text = await callChatCompletionOnce({
       baseUrl: settings.baseUrl,
+      chatPath: settings.chatPath,
       apiKey: settings.apiKey,
       model: settings.model,
       temperature: settings.temperature,
@@ -434,7 +452,7 @@ export async function chatAboutVideo(args: ChatArgs): Promise<{ content: string 
     userMessage,
   });
 
-  const url = `${settings.baseUrl.replace(/\/$/, '')}/text/chatcompletion_v2`;
+  const url = buildChatUrl(settings.baseUrl, settings.chatPath);
   const res = await fetch(url, {
     method: 'POST',
     headers: {

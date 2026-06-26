@@ -85,6 +85,12 @@ export interface Settings {
   vendor: VendorId; // 厂商(决定 baseUrl + 模型列表)
   apiKey: string; // 加密后存储的密文(若 rememberKey),否则为空
   baseUrl: string; // 选厂商时自动填入,允许覆盖
+  /**
+   * Chat Completions 端点路径(拼到 baseUrl 后面)。
+   * 默认按厂商(MiniMax 用 `/text/chatcompletion_v2`,其它用 `/chat/completions`)。
+   * 老数据无此字段时,运行时会按 model 自动补齐。
+   */
+  chatPath: string;
   model: string; // 选厂商时自动填入默认模型,允许覆盖
   temperature: number; // 默认 0.4
   useChunked: boolean; // 默认 true
@@ -98,6 +104,7 @@ export const DEFAULT_SETTINGS: Settings = {
   vendor: 'MiniMax',
   apiKey: '',
   baseUrl: 'https://api.minimaxi.com/v1',
+  chatPath: '/text/chatcompletion_v2',
   model: 'MiniMax-M3',
   temperature: 0.4,
   useChunked: true,

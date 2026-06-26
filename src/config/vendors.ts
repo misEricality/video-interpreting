@@ -29,6 +29,12 @@ export interface VendorInfo {
   name: string;
   /** OpenAI 兼容接口的基础 URL */
   baseUrl: string;
+  /**
+   * Chat Completions 端点路径(拼到 baseUrl 后面)。
+   * - 大多数厂商使用 OpenAI 标准 `/chat/completions`
+   * - MiniMax 用自家专有 `/text/chatcompletion_v2`
+   */
+  chatPath: string;
   /** 申请 API Key 的官方页面 */
   keyUrl: string;
   /** 简短介绍(展示在设置面板) */
@@ -44,6 +50,7 @@ export const VENDORS: VendorInfo[] = [
     id: 'deepseek',
     name: 'DeepSeek',
     baseUrl: 'https://api.deepseek.com/v1',
+    chatPath: '/chat/completions',
     keyUrl: 'https://platform.deepseek.com/api_keys',
     description: '深度求索,国产开源之光,价格便宜,长上下文表现好。',
     defaultModel: 'deepseek-v4-flash',
@@ -59,6 +66,7 @@ export const VENDORS: VendorInfo[] = [
     id: 'doubao',
     name: 'Doubao (豆包)',
     baseUrl: 'https://ark.cn-beijing.volces.com/api/v3',
+    chatPath: '/chat/completions',
     keyUrl: 'https://console.volcengine.com/ark/region:ark+cn-beijing/apiKey',
     description: '字节跳动豆包,火山引擎托管,中文能力强。',
     defaultModel: 'doubao-seed-2-0-pro',
@@ -81,6 +89,7 @@ export const VENDORS: VendorInfo[] = [
     id: 'glm',
     name: 'GLM (智谱)',
     baseUrl: 'https://open.bigmodel.cn/api/paas/v4',
+    chatPath: '/chat/completions',
     keyUrl: 'https://bigmodel.cn/console/apikeys',
     description: '智谱 GLM 系列,清华系,工具调用与代码能力强。',
     defaultModel: 'glm-5',
@@ -95,6 +104,7 @@ export const VENDORS: VendorInfo[] = [
     id: 'kimi',
     name: 'Kimi (月之暗面)',
     baseUrl: 'https://api.moonshot.cn/v1',
+    chatPath: '/chat/completions',
     keyUrl: 'https://platform.moonshot.cn/console/api-keys',
     description: 'Moonshot Kimi,长文本之王,擅长中文阅读理解。',
     defaultModel: 'kimi-k2.6',
@@ -109,6 +119,7 @@ export const VENDORS: VendorInfo[] = [
     id: 'MiniMax',
     name: 'MiniMax',
     baseUrl: 'https://api.minimaxi.com/v1',
+    chatPath: '/text/chatcompletion_v2',
     keyUrl: 'https://api.minimaxi.com/user-center/basic-information/interface-key',
     description: 'MiniMax,OpenAI 兼容,本项目原始推荐。',
     defaultModel: 'MiniMax-M3',
@@ -147,6 +158,22 @@ export function detectBaseUrlByModel(modelId: string | undefined | null): string
   for (const v of VENDORS) {
     if (v.models.some((m) => m.id === modelId)) {
       return v.baseUrl;
+    }
+  }
+  return null;
+}
+
+/**
+ * 根据模型 ID 反查 chat 端点路径(同 detectBaseUrlByModel 的逻辑)。
+ *
+ * 用法:用户输 `MiniMax-M3` → 返回 `/text/chatcompletion_v2`
+ *      用户输 `deepseek-v4-pro` → 返回 `/chat/completions`
+ */
+export function detectChatPathByModel(modelId: string | undefined | null): string | null {
+  if (!modelId) return null;
+  for (const v of VENDORS) {
+    if (v.models.some((m) => m.id === modelId)) {
+      return v.chatPath;
     }
   }
   return null;
