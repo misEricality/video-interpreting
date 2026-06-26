@@ -20,7 +20,7 @@ import { decryptString, encryptString } from '@/utils/crypto';
 import { parseBvid, normalizeBiliUrl } from '@/utils/url';
 import { fetchVideoMeta, fetchSubtitles } from '@/services/bilibili';
 import { chatAboutVideo, interpretVideo, type ProgressEvent } from '@/services/ai';
-import { getVendor, detectBaseUrlByModel, detectChatPathByModel } from '@/config/vendors';
+import { getVendor, detectBaseUrlByModel, detectChatPathByModel, findVendorByModel } from '@/config/vendors';
 
 interface AppStore {
   // ===== State =====
@@ -87,12 +87,30 @@ export const useAppStore = create<AppStore>((set, get) => ({
     if (persisted.rememberSessdata && persisted.sessdata) {
       sessdata = await decryptString(persisted.sessdata);
     }
-    // 老数据迁移:如果没有 vendor 字段,补成 MiniMax(项目原始推荐)
+    // 老数据迁移:补齐缺失/不一致的 vendor / chatPath / baseUrl
+    const fromModel = findVendorByModel(persisted.model);
+    const expectedVendor =
+      (persisted as any).vendor && (persisted as any).vendor !== 'undefined'
+        ? (persisted as any).vendor
+        : fromModel?.id || DEFAULT_SETTINGS.vendor;
     const migrated: Settings = {
       ...persisted,
-      vendor: (persisted as any).vendor ?? DEFAULT_SETTINGS.vendor,
+      // 1. 修正 vendor:如果当前 vendor 与 model 不匹配,以 model 为准
+      vendor: fromModel ? fromModel.id : expectedVendor,
       apiKey,
       sessdata,
+      // 2. 修正 baseUrl:若当前 baseUrl 与 vendor 不匹配,以 vendor 为准
+      baseUrl:
+        (persisted as any).baseUrl && getVendor(expectedVendor).baseUrl !== (persisted as any).baseUrl
+          ? fromModel
+            ? fromModel.baseUrl
+            : getVendor(expectedVendor).baseUrl
+          : (persisted as any).baseUrl || DEFAULT_SETTINGS.baseUrl,
+      // 3. 修正 chatPath:同上
+      chatPath:
+        (persisted as any).chatPath ||
+        detectChatPathByModel(persisted.model) ||
+        getVendor(expectedVendor).chatPath,
     };
     set({
       settings: migrated,
@@ -113,16 +131,25 @@ export const useAppStore = create<AppStore>((set, get) => ({
         next.model = v.defaultModel;
       }
     }
-    // 模型改变时:若新模型在已知厂商列表里,自动同步 baseUrl + chatPath
-    // (用户不再需要选厂商,只需输模型名)
+    // 模型改变时:若新模型在已知厂商列表里(模糊匹配),自动同步 vendor / baseUrl / chatPath
+    // (用户不再需要选厂商,只需输模型名 — 包括显示名格式如 `DeepSeek-V4-Pro`)
     if (patch.model && patch.model !== prev.model) {
+      const v = findVendorByModel(patch.model);
       const detectedUrl = detectBaseUrlByModel(patch.model);
       const detectedPath = detectChatPathByModel(patch.model);
-      if (detectedUrl && detectedUrl !== next.baseUrl) {
-        next.baseUrl = detectedUrl;
-      }
-      if (detectedPath && detectedPath !== next.chatPath) {
-        next.chatPath = detectedPath;
+      if (v) {
+        // 同步 vendor — 保证 vendor 与模型一致
+        if (v.id !== next.vendor) next.vendor = v.id;
+        if (v.baseUrl !== next.baseUrl) next.baseUrl = v.baseUrl;
+        if (v.chatPath !== next.chatPath) next.chatPath = v.chatPath;
+      } else {
+        // 模型未命中已知列表,只更新 baseUrl/chatPath(若能识别)
+        if (detectedUrl && detectedUrl !== next.baseUrl) {
+          next.baseUrl = detectedUrl;
+        }
+        if (detectedPath && detectedPath !== next.chatPath) {
+          next.chatPath = detectedPath;
+        }
       }
     }
     // 决定是否加密存储敏感字段

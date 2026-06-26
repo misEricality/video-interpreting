@@ -157,46 +157,63 @@ export function getVendor(id: string | undefined | null): VendorInfo {
 }
 
 /**
- * 根据模型 ID 反查 base URL — 用户在「模型」框里直接输入模型名时,
- * 自动把 base URL 切到对应的厂商(若模型不在任何已知列表里,返回 null)。
+ * 把模型名归一化,用于模糊匹配:
+ * - 转小写
+ * - 把 `-` / `_` / 空格 都去掉(都视作同一种分隔符)
  *
- * 用法:用户输 `deepseek-v4-flash` → 自动填入 `https://api.deepseek.com/v1`
+ * 例:`DeepSeek-V4-Pro` / `deepseek v4 pro` / `DeepSeek_V4_Pro` 都归一为 `deepseekv4pro`
+ */
+function normalizeModel(s: string): string {
+  return s.toLowerCase().replace(/[-_\s]+/g, '');
+}
+
+/** 模型名是否命中某条 v 的某个 model:精确 id 或归一化后的 id/label 匹配 */
+function matchModel(modelId: string, v: VendorInfo): boolean {
+  const target = normalizeModel(modelId);
+  return v.models.some((m) => {
+    if (m.id === modelId) return true; // 精确 id 命中
+    if (normalizeModel(m.id) === target) return true; // 归一化 id 命中
+    if (normalizeModel(m.label) === target) return true; // 归一化 label 命中
+    return false;
+  });
+}
+
+/**
+ * 根据模型名反查 base URL — 用户在「模型」框里输入模型名时,
+ * 自动把 base URL 切到对应的厂商。
+ *
+ * - 精确匹配 model.id(向后兼容)
+ * - 模糊匹配:不区分大小写,忽略 `-` `_` 空格,同时匹配 id 和 label
+ *   例:`DeepSeek-V4-Pro` → `https://api.deepseek.com/v1`
+ *      `DeepSeek V4 Pro`  → `https://api.deepseek.com/v1`
+ *      `deepseekv4pro`    → `https://api.deepseek.com/v1`
  */
 export function detectBaseUrlByModel(modelId: string | undefined | null): string | null {
   if (!modelId) return null;
   for (const v of VENDORS) {
-    if (v.models.some((m) => m.id === modelId)) {
-      return v.baseUrl;
-    }
+    if (matchModel(modelId, v)) return v.baseUrl;
   }
   return null;
 }
 
 /**
- * 根据模型 ID 反查 chat 端点路径(同 detectBaseUrlByModel 的逻辑)。
- *
- * 用法:用户输 `MiniMax-M3` → 返回 `/text/chatcompletion_v2`
- *      用户输 `deepseek-v4-pro` → 返回 `/chat/completions`
+ * 根据模型名反查 chat 端点路径(同 detectBaseUrlByModel 的逻辑)。
  */
 export function detectChatPathByModel(modelId: string | undefined | null): string | null {
   if (!modelId) return null;
   for (const v of VENDORS) {
-    if (v.models.some((m) => m.id === modelId)) {
-      return v.chatPath;
-    }
+    if (matchModel(modelId, v)) return v.chatPath;
   }
   return null;
 }
 
 /**
- * 根据模型 ID 找厂商(用于"去 XX 控制台申请 Key"链接)。
+ * 根据模型名找厂商(用于"去 XX 控制台申请 Key"链接 + 启动时纠正 settings.vendor)。
  */
 export function findVendorByModel(modelId: string | undefined | null): VendorInfo | null {
   if (!modelId) return null;
   for (const v of VENDORS) {
-    if (v.models.some((m) => m.id === modelId)) {
-      return v;
-    }
+    if (matchModel(modelId, v)) return v;
   }
   return null;
 }
