@@ -93,22 +93,32 @@ export function SettingsDrawer() {
           </p>
         </Section>
 
-        {/* ============ 模型选择(级联) ============ */}
+        {/* ============ 模型(自动补全 + 自由输入) ============ */}
         <Section
           icon={<Cpu className="h-4 w-4 text-brand-500" />}
           title="模型"
-          tip={`${vendor.name} 提供的模型`}
+          tip={`${vendor.name} 支持的模型(可自定义)`}
         >
-          <Select
+          <Input
             value={draft.model}
             onChange={(e) => setDraft({ ...draft, model: e.target.value })}
-          >
+            placeholder="例如 MiniMax-M3 / deepseek-chat / gpt-4o"
+            spellCheck={false}
+            list="vendor-model-suggestions"
+          />
+          <datalist id="vendor-model-suggestions">
             {vendor.models.map((m) => (
               <option key={m.id} value={m.id}>
-                {m.label} {m.hint ? `· ${m.hint}` : ''}
+                {m.label}
+                {m.hint ? ` · ${m.hint}` : ''}
               </option>
             ))}
-          </Select>
+          </datalist>
+          <p className="mt-1.5 text-[10px] text-[var(--ink-subtle)] leading-relaxed">
+            输时会显示当前厂商的常用模型作为建议(可手填其他名字)。
+            <br />
+            模型名以各家最新文档为准 — 该字段已开放为自由输入。
+          </p>
         </Section>
 
         {/* ============ API Key ============ */}
@@ -242,9 +252,14 @@ export function SettingsDrawer() {
             size="sm"
             icon={<RotateCcw className="h-3.5 w-3.5" />}
             onClick={() => {
-              if (confirm('恢复默认设置?当前 Key/历史不会被删除,只重置为初始配置。')) {
-                const fresh = { ...settings, vendor: 'MiniMax' as VendorId, baseUrl: 'https://api.minimaxi.com/v1', model: 'MiniMax-M3' };
-                setDraft(fresh);
+              if (confirm('恢复默认设置?当前 Key/历史不会被删除,只重置厂商、模型、Base URL 为初始配置。')) {
+                const v = getVendor('MiniMax');
+                setDraft({
+                  ...settings,
+                  vendor: 'MiniMax' as VendorId,
+                  baseUrl: v.baseUrl,
+                  model: v.defaultModel,
+                });
               }
             }}
           >

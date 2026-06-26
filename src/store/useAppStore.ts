@@ -103,12 +103,18 @@ export const useAppStore = create<AppStore>((set, get) => ({
   updateSettings: async (patch) => {
     const prev = get().settings;
     const next: Settings = { ...prev, ...patch };
-    // 切厂商时:自动同步 baseUrl 和 model(避免用户手动改)
-    // 但如果用户已经在该厂商下手动改过 model,允许保留(由 UI 层决定是否传 patch.model)
+    // 切厂商时:只自动同步 baseUrl
+    // (模型字段已改为自由输入,保留用户可能填的非默认模型;
+    //  UI 上方用 <datalist> 提供当前厂商的常见型号作建议)
     if (patch.vendor && patch.vendor !== prev.vendor) {
       const v = getVendor(patch.vendor);
       next.baseUrl = v.baseUrl;
-      next.model = v.defaultModel;
+      // 如果用户当前模型不在新厂商的模型列表里(说明是用户自填的或来自老厂商),
+      // 则替换为新厂商的默认模型,避免请求时报"未知模型"。
+      const stillValid = v.models.some((m) => m.id === next.model);
+      if (!stillValid) {
+        next.model = v.defaultModel;
+      }
     }
     // 决定是否加密存储敏感字段
     let storedKey = next.apiKey;
