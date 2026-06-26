@@ -118,3 +118,32 @@ export function getVendor(id: string | undefined | null): VendorInfo {
   if (id && id in VENDOR_MAP) return VENDOR_MAP[id as VendorId];
   return VENDOR_MAP.MiniMax;
 }
+
+/**
+ * 根据模型 ID 反查 base URL — 用户在「模型」框里直接输入模型名时,
+ * 自动把 base URL 切到对应的厂商(若模型不在任何已知列表里,返回 null)。
+ *
+ * 用法:用户输 `deepseek-chat` → 自动填入 `https://api.deepseek.com/v1`
+ */
+export function detectBaseUrlByModel(modelId: string | undefined | null): string | null {
+  if (!modelId) return null;
+  for (const v of VENDORS) {
+    if (v.models.some((m) => m.id === modelId)) {
+      return v.baseUrl;
+    }
+  }
+  return null;
+}
+
+/**
+ * 根据模型 ID 找厂商(用于"去 XX 控制台申请 Key"链接)。
+ */
+export function findVendorByModel(modelId: string | undefined | null): VendorInfo | null {
+  if (!modelId) return null;
+  for (const v of VENDORS) {
+    if (v.models.some((m) => m.id === modelId)) {
+      return v;
+    }
+  }
+  return null;
+}

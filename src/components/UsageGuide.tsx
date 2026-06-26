@@ -10,9 +10,7 @@ import {
   MessageCircleQuestion,
   AlertTriangle,
   ShieldCheck,
-  Building2,
 } from 'lucide-react';
-import { VENDORS } from '@/config/vendors';
 
 /**
  * 「使用指南」抽屉 - 给首次使用 / 遇到问题的用户一个完整说明。
@@ -41,33 +39,16 @@ export function UsageGuide() {
         {/* Step 1 - API Key */}
         <Section
           icon={<KeyRound className="h-4 w-4 text-brand-500" />}
-          title="1. 选择 AI 厂商 + 配置 Key"
+          title="1. 配置模型 + API Key"
         >
           <p>这是使用 AI 的「钥匙」,每个用户用自己的 Key,本站不存储、不中转。</p>
-          <p className="mt-2 mb-1.5 text-[var(--ink)] font-medium flex items-center gap-1.5">
-            <Building2 className="h-3.5 w-3.5 text-brand-500" />
-            支持的厂商
-          </p>
-          <ul className="space-y-1 pl-4 list-disc">
-            {VENDORS.map((v) => (
-              <li key={v.id}>
-                <a
-                  href={v.keyUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-brand-500 hover:underline"
-                >
-                  {v.name}
-                </a>
-                <span className="text-[var(--ink-subtle)] text-xs"> · {v.description}</span>
-              </li>
-            ))}
-          </ul>
-          <ol className="mt-3 space-y-1.5 pl-4 list-decimal">
-            <li>在任一厂商控制台注册/登录,创建一个 API Key</li>
-            <li>回到本站 → 右上角 ⚙ 设置 → 「AI 厂商」选你注册的厂商</li>
-            <li>base URL 和模型会自动填好(也可手动改)</li>
-            <li>把 Key 粘到「API Key」框,旁边有「去 XX 控制台申请 Key」直达链接</li>
+          <ol className="mt-2 space-y-1.5 pl-4 list-decimal">
+            <li>
+              在支持 OpenAI 兼容接口的厂商(MiniMax / DeepSeek / 豆包 / 智谱 / Kimi / OpenAI 等)
+              注册并创建一个 API Key
+            </li>
+            <li>本站 → 右上角 ⚙ 设置 → 「模型」框输入模型名(下方有自动补全建议)</li>
+            <li>填 Key,旁边会自动出现「去 XX 控制台申请 Key」直达链接</li>
             <li>勾选「记住 API Key」,下次自动填充(本机加密存储)</li>
           </ol>
         </Section>

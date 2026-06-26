@@ -15,8 +15,11 @@ export function InputBar() {
   const isLoading = loading.stage !== 'idle' && loading.stage !== 'done';
 
   /**
-   * 失焦时:清洗 URL(去掉分享时附加的追踪参数),保留提示。
-   * 同时也用于提交时强制清洗(用户可能粘完链接直接点按钮,没失焦过)。
+   * 失焦时:清洗 URL(去掉分享时附加的追踪参数),持久显示提示。
+   * 也用于提交时强制清洗(用户可能粘完链接直接点按钮,没失焦过)。
+   *
+   * 提示会一直保留,直到用户重新输入新内容 — 给用户清晰的反馈,
+   * "这个 URL 被简化了"。
    */
   const cleanUrlInPlace = (showHint: boolean) => {
     const trimmed = url.trim();
@@ -26,7 +29,7 @@ export function InputBar() {
       setUrl(cleaned);
       if (showHint) {
         setUrlCleaned(true);
-        setTimeout(() => setUrlCleaned(false), 3000);
+        // 不再 setTimeout 自动清除 — 提示常驻直到下次输入
       }
       return true;
     }

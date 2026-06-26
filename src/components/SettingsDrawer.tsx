@@ -1,10 +1,9 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Drawer } from './ui/Drawer';
 import { Input } from './ui/Input';
-import { Select } from './ui/Select';
 import { Button } from './ui/Button';
 import { useAppStore } from '@/store/useAppStore';
-import { VENDORS, getVendor, type VendorId } from '@/config/vendors';
+import { findVendorByModel, VENDORS } from '@/config/vendors';
 import {
   KeyRound,
   Cookie,
@@ -13,9 +12,7 @@ import {
   ExternalLink,
   RotateCcw,
   AlertTriangle,
-  Info,
   Trash2,
-  Building2,
 } from 'lucide-react';
 
 export function SettingsDrawer() {
@@ -33,11 +30,21 @@ export function SettingsDrawer() {
     if (open) setDraft(settings);
   }, [open, settings]);
 
-  const vendor = useMemo(() => getVendor(draft.vendor), [draft.vendor]);
+  // 根据当前模型自动识别厂商,用于"申请 Key"链接
+  const vendor = useMemo(() => findVendorByModel(draft.model), [draft.model]);
+  // 收集所有已知模型,用作 datalist(跨厂商聚合)
+  const allModels = useMemo(
+    () => VENDORS.flatMap((v) => v.models.map((m) => ({ ...m, vendorName: v.name }))),
+    []
+  );
 
   const handleSave = async () => {
     if (!draft.apiKey.trim()) {
       alert('请填写 API Key');
+      return;
+    }
+    if (!draft.model.trim()) {
+      alert('请填写模型名');
       return;
     }
     await updateSettings(draft);
@@ -45,7 +52,12 @@ export function SettingsDrawer() {
   };
 
   const handleClearAll = async () => {
-    if (!confirm('确定要清空所有数据吗?(API Key、对话历史、SESSDATA)' + '\n此操作不可恢复!')) return;
+    if (
+      !confirm(
+        '确定要清空所有数据吗?(API Key、对话历史、SESSDATA)\n此操作不可恢复!'
+      )
+    )
+      return;
     await clearAllData();
     setDrawer('settings', false);
   };
@@ -55,7 +67,7 @@ export function SettingsDrawer() {
       open={open}
       onOpenChange={(v) => setDrawer('settings', v)}
       title="设置"
-      description="AI 厂商、Key、视频解读行为"
+      description="模型、Key、视频解读行为"
       side="right"
       width="w-full sm:max-w-lg"
       footer={
@@ -70,62 +82,26 @@ export function SettingsDrawer() {
       }
     >
       <div className="space-y-5 text-sm">
-        {/* ============ 厂商选择 ============ */}
-        <Section
-          icon={<Building2 className="h-4 w-4 text-brand-500" />}
-          title="AI 厂商"
-          tip="切换后会自动填入对应的 base URL 和默认模型"
-        >
-          <Select
-            value={draft.vendor}
-            onChange={(e) =>
-              setDraft({ ...draft, vendor: e.target.value as VendorId })
-            }
-          >
-            {VENDORS.map((v) => (
-              <option key={v.id} value={v.id}>
-                {v.name}
-              </option>
-            ))}
-          </Select>
-          <p className="mt-1.5 text-xs text-[var(--ink-subtle)] leading-relaxed">
-            {vendor.description}
-          </p>
-        </Section>
-
-        {/* ============ 模型(自动补全 + 自由输入) ============ */}
-        <Section
-          icon={<Cpu className="h-4 w-4 text-brand-500" />}
-          title="模型"
-          tip={`${vendor.name} 支持的模型(可自定义)`}
-        >
+        {/* ============ 模型 ============ */}
+        <Section icon={<Cpu className="h-4 w-4 text-brand-500" />} title="模型">
           <Input
             value={draft.model}
             onChange={(e) => setDraft({ ...draft, model: e.target.value })}
             placeholder="例如 MiniMax-M3 / deepseek-chat / gpt-4o"
             spellCheck={false}
-            list="vendor-model-suggestions"
+            list="known-models"
           />
-          <datalist id="vendor-model-suggestions">
-            {vendor.models.map((m) => (
-              <option key={m.id} value={m.id}>
-                {m.label}
-                {m.hint ? ` · ${m.hint}` : ''}
+          <datalist id="known-models">
+            {allModels.map((m) => (
+              <option key={`${m.vendorName}-${m.id}`} value={m.id}>
+                {m.label} · {m.vendorName}
               </option>
             ))}
           </datalist>
-          <p className="mt-1.5 text-[10px] text-[var(--ink-subtle)] leading-relaxed">
-            输时会显示当前厂商的常用模型作为建议(可手填其他名字)。
-            <br />
-            模型名以各家最新文档为准 — 该字段已开放为自由输入。
-          </p>
         </Section>
 
         {/* ============ API Key ============ */}
-        <Section
-          icon={<KeyRound className="h-4 w-4 text-brand-500" />}
-          title="API Key"
-        >
+        <Section icon={<KeyRound className="h-4 w-4 text-brand-500" />} title="API Key">
           <div className="space-y-2">
             <Input
               type="password"
@@ -135,20 +111,24 @@ export function SettingsDrawer() {
               autoComplete="off"
               spellCheck={false}
             />
-            <a
-              href={vendor.keyUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1 text-xs text-brand-500 hover:underline"
-            >
-              去 {vendor.name} 控制台申请 Key
-              <ExternalLink className="h-3 w-3" />
-            </a>
+            {vendor && (
+              <a
+                href={vendor.keyUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 text-xs text-brand-500 hover:underline"
+              >
+                去 {vendor.name} 控制台申请 Key
+                <ExternalLink className="h-3 w-3" />
+              </a>
+            )}
             <label className="flex items-center gap-2 text-xs text-[var(--ink-muted)] cursor-pointer select-none pt-1">
               <input
                 type="checkbox"
                 checked={draft.rememberKey}
-                onChange={(e) => setDraft({ ...draft, rememberKey: e.target.checked })}
+                onChange={(e) =>
+                  setDraft({ ...draft, rememberKey: e.target.checked })
+                }
                 className="rounded"
               />
               记住 API Key(本机加密存储)
@@ -156,27 +136,18 @@ export function SettingsDrawer() {
           </div>
         </Section>
 
-        {/* ============ 高级:Base URL + Temperature + Chunked ============ */}
-        <Section icon={<Info className="h-4 w-4 text-brand-500" />} title="高级" tip="一般不用改">
+        {/* ============ 高级:只剩 Temperature + Chunked ============ */}
+        <Section icon={<Thermometer className="h-4 w-4 text-brand-500" />} title="高级">
           <div className="space-y-3">
-            <div>
-              <label className="text-xs text-[var(--ink-muted)] mb-1 block">
-                API Base URL
-              </label>
-              <Input
-                value={draft.baseUrl}
-                onChange={(e) => setDraft({ ...draft, baseUrl: e.target.value })}
-                placeholder={vendor.baseUrl}
-                spellCheck={false}
-              />
-            </div>
             <div>
               <label className="text-xs text-[var(--ink-muted)] mb-1 flex items-center justify-between">
                 <span className="inline-flex items-center gap-1">
                   <Thermometer className="h-3 w-3" />
                   Temperature
                 </span>
-                <span className="text-[var(--ink)] font-mono">{draft.temperature.toFixed(1)}</span>
+                <span className="text-[var(--ink)] font-mono">
+                  {draft.temperature.toFixed(1)}
+                </span>
               </label>
               <input
                 type="range"
@@ -194,7 +165,9 @@ export function SettingsDrawer() {
               <input
                 type="checkbox"
                 checked={draft.useChunked}
-                onChange={(e) => setDraft({ ...draft, useChunked: e.target.checked })}
+                onChange={(e) =>
+                  setDraft({ ...draft, useChunked: e.target.checked })
+                }
                 className="mt-0.5 rounded"
               />
               <span>
@@ -209,17 +182,11 @@ export function SettingsDrawer() {
         </Section>
 
         {/* ============ SESSDATA ============ */}
-        <Section
-          icon={<Cookie className="h-4 w-4 text-brand-500" />}
-          title="B 站 SESSDATA"
-          tip="可选。填了能拿登录/付费视频的字幕"
-        >
+        <Section icon={<Cookie className="h-4 w-4 text-brand-500" />} title="B 站 SESSDATA">
           <SessdataControl
             value={draft.sessdata}
             remember={draft.rememberSessdata}
-            onChange={(v, r) =>
-              setDraft({ ...draft, sessdata: v, rememberSessdata: r })
-            }
+            onChange={(v, r) => setDraft({ ...draft, sessdata: v, rememberSessdata: r })}
           />
         </Section>
 
@@ -252,14 +219,12 @@ export function SettingsDrawer() {
             size="sm"
             icon={<RotateCcw className="h-3.5 w-3.5" />}
             onClick={() => {
-              if (confirm('恢复默认设置?当前 Key/历史不会被删除,只重置厂商、模型、Base URL 为初始配置。')) {
-                const v = getVendor('MiniMax');
-                setDraft({
-                  ...settings,
-                  vendor: 'MiniMax' as VendorId,
-                  baseUrl: v.baseUrl,
-                  model: v.defaultModel,
-                });
+              if (
+                confirm(
+                  '恢复默认设置?当前 Key/历史不会被删除,只重置模型、Base URL 为初始配置。'
+                )
+              ) {
+                setDraft({ ...settings, model: 'MiniMax-M3', baseUrl: 'https://api.minimaxi.com/v1' });
               }
             }}
           >
@@ -276,23 +241,18 @@ export function SettingsDrawer() {
 function Section({
   icon,
   title,
-  tip,
   children,
 }: {
   icon: React.ReactNode;
   title: string;
-  tip?: string;
   children: React.ReactNode;
 }) {
   return (
     <section>
-      <div className="flex items-center justify-between mb-2">
-        <h3 className="flex items-center gap-2 text-sm font-semibold text-[var(--ink)]">
-          {icon}
-          {title}
-        </h3>
-        {tip && <span className="text-[10px] text-[var(--ink-subtle)]">{tip}</span>}
-      </div>
+      <h3 className="flex items-center gap-2 text-sm font-semibold text-[var(--ink)] mb-2">
+        {icon}
+        {title}
+      </h3>
       {children}
     </section>
   );
@@ -341,7 +301,12 @@ function SessdataControl({
           <li>浏览器登录 bilibili.com</li>
           <li>F12 → Application → Cookies → https://www.bilibili.com</li>
           <li>找 SESSDATA,双击 Value 列复制</li>
-          <li>或 Console 跑 <code className="bg-[var(--bg-soft)] px-1 rounded text-[10px]">document.cookie.match(/SESSDATA=([^;]+)/)?.[1]</code></li>
+          <li>
+            或 Console 跑{' '}
+            <code className="bg-[var(--bg-soft)] px-1 rounded text-[10px]">
+              document.cookie.match(/SESSDATA=([^;]+)/)?.[1]
+            </code>
+          </li>
         </ol>
       )}
     </div>
